@@ -7,7 +7,7 @@ from sqlalchemy_utils.types import TSVectorType
 from sqlalchemy import Table
 from sqlalchemy.ext.declarative import declarative_base
 import enum
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import TSVECTOR, JSONB
 
 Base = declarative_base(cls=AsyncAttrs)
 
@@ -43,11 +43,23 @@ class User(Base):
     constituency = Column(String, nullable=False)
     district = Column(String, nullable=False)
     sub_county = Column(String, nullable=False)
+    region = Column(String, nullable=False)
+    parish = Column(String, nullable=False)
+    village = Column(String, nullable=False)
     gender = Column(String, nullable=False)
     date_of_birth = Column(Date, nullable=False)
     phone_number = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=True)
     password = Column(String, nullable=False)
+    bio = Column(String, nullable=True)
+    political_interest = Column(String, nullable=True)
+    community_role = Column(String, nullable=True)
+    occupation = Column(String, nullable=True)
+    interests = Column(JSONB, nullable=True)
+    notification_email = Column(Boolean, default=True, nullable=False)
+    notification_sms = Column(Boolean, default=False, nullable=False)
+    notification_push = Column(Boolean, default=True, nullable=False)
+    profile_image = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
     role = Column(Enum(Role), default=Role.CITIZEN, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -61,7 +73,6 @@ class User(Base):
     sent_messages = relationship("Message", back_populates="sender", foreign_keys="[Message.sender_id]")
     received_messages = relationship("Message", back_populates="recipient", foreign_keys="[Message.recipient_id]")
     live_feeds = relationship("LiveFeed", back_populates="journalist")
-
 
 class Post(Base):
     __tablename__ = "posts"

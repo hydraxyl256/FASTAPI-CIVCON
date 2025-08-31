@@ -20,19 +20,31 @@ class Role(str, Enum):
     ADMIN = "admin"
     JOURNALIST = "journalist"
 
+
+class Notifications(BaseModel):
+    email: bool = True
+    sms: bool = False
+    push: bool = True
+
+    
 class CreateUser(BaseModel):
-    username: str
-    full_name: str
-    nin: str
-    constituency: str
-    district: str
-    sub_county: str
-    gender: str
-    date_of_birth: date
-    phone_number: str
+    first_name: str
+    last_name: str
     email: Optional[EmailStr] = None
     password: str
-    role: Role = Role.CITIZEN  # Default to citizen
+    confirm_password: str
+    region: str
+    district: str
+    county: str
+    sub_county: str
+    parish: str
+    village: str
+    interests: List[str] = []
+    occupation: str = ""
+    bio: Optional[str] = None
+    political_interest: Optional[str] = None
+    community_role: Optional[str] = None
+    notifications: Notifications = Notifications()
 
 
 class UserOut(BaseModel):
@@ -43,10 +55,22 @@ class UserOut(BaseModel):
     constituency: str
     district: str
     sub_county: str
+    region: str
+    parish: str
+    village: str
     gender: str
     date_of_birth: date
     phone_number: str
     email: Optional[EmailStr]
+    bio: Optional[str]
+    political_interest: Optional[str]
+    community_role: Optional[str]
+    occupation: Optional[str]
+    interests: List[str]
+    notification_email: bool
+    notification_sms: bool
+    notification_push: bool
+    profile_image: Optional[str]
     created_at: datetime
     role: Role
     is_active: bool
@@ -174,8 +198,7 @@ class GroupResponse(GroupBase):
     created_at: datetime
     owner_id: int
     owner: UserOut
-    member_count: int  # Number of members in the group
-
+    member_count: int  
     class Config:
         from_attributes = True
 

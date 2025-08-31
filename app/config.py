@@ -9,9 +9,13 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
+    google_client_id: str
+    google_client_secret: str
+    linkedin_client_id: str
+    linkedin_client_secret: str
 
     model_config = SettingsConfigDict(
-        env_file=".env",  # Load from .env file
+        env_file=".env",  
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
