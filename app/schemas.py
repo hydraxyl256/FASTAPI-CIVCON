@@ -216,3 +216,8 @@ class NotificationResponse(NotificationBase):
 class NotificationListResponse(BaseModel):
     data: List[NotificationResponse]
     pagination: dict
+
+class ShareRequest(BaseModel):
+    recipient_ids: Optional[List[int]] = None  # For in-app sharing to users
+    group_id: Optional[int] = None  # For group sharing
+    platform: Optional[str] = None  # e.g., "twitter", "whatsapp"
