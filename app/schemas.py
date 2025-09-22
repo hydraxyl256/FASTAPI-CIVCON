@@ -9,9 +9,8 @@ class PostBase(BaseModel):
     title_of_the_post: str
     content: str
     published: bool = True
-    category_ids: Optional[List[int]] = []  # List of category IDs for post categorization
-    group_id: Optional[int] = None  # ID of the group the post belongs to (if any)
-
+    category_ids: Optional[List[int]] = []
+    group_id: Optional[int] = None
 
 
 class Role(str, Enum):
@@ -26,19 +25,20 @@ class Notifications(BaseModel):
     sms: bool = False
     push: bool = True
 
-    
-class CreateUser(BaseModel):
+
+class UserBase(BaseModel):
+    username: str  # Added to match user.py
     first_name: str
     last_name: str
     email: Optional[EmailStr] = None
     password: str
     confirm_password: str
     region: str
-    district: str
-    county: str
-    sub_county: str
-    parish: str
-    village: str
+    district: str  # District ID
+    constituency: str  # Renamed from county to match user.py
+    sub_county: str  # Sub-county ID
+    parish: str    # Parish ID
+    village: str   # Village name
     interests: List[str] = []
     occupation: str = ""
     bio: Optional[str] = None
@@ -46,50 +46,45 @@ class CreateUser(BaseModel):
     community_role: Optional[str] = None
     notifications: Notifications = Notifications()
 
+class UserCreate(UserBase):
+    pass  # Inherits username, password, confirm_password
 
-class UserOut(BaseModel):
+class UserSignup(BaseModel):  # Added to wrap UserCreate
+    user: UserCreate
+
+class UserOut(UserBase):
     id: int
-    username: str
-    full_name: str
-    nin: str
-    constituency: str
-    district: str
-    sub_county: str
-    region: str
-    parish: str
-    village: str
-    gender: str
-    date_of_birth: date
-    phone_number: str
-    email: Optional[EmailStr]
-    bio: Optional[str]
-    political_interest: Optional[str]
-    community_role: Optional[str]
-    occupation: Optional[str]
-    interests: List[str]
+    role: Role
+    is_active: bool
+    created_at: datetime
+    profile_image: Optional[str] = None
     notification_email: bool
     notification_sms: bool
     notification_push: bool
-    profile_image: Optional[str]
-    created_at: datetime
-    role: Role
-    is_active: bool
 
     class Config:
         from_attributes = True
 
 
 
-class MessageCreate(BaseModel):
-    recipient_id: int
+class MessageBase(BaseModel):
     content: str
 
-class MessageResponse(BaseModel):
+
+class MessageCreate(BaseModel):
+    recipient_id: Optional[int] = None  # Optional for auto-routing to MP
+    content: str
+
+class MessageResponse(MessageBase):
     id: int
     sender_id: int
     recipient_id: int
-    content: str
     created_at: datetime
+    is_read: bool  
+    sender: UserOut
+    recipient: UserOut
+
+
     class Config:
         from_attributes = True
 

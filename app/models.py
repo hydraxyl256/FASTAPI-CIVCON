@@ -1,38 +1,38 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, Computed, Enum, Date
-from sqlalchemy.sql.sqltypes import TIMESTAMP
-from sqlalchemy.sql.expression import text
+from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, Enum, Date
+from sqlalchemy.sql import text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy_utils.types import TSVectorType
-from sqlalchemy import Table
-from sqlalchemy.ext.declarative import declarative_base
-import enum
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.sql.schema import ForeignKey, Table
 from sqlalchemy.dialects.postgresql import TSVECTOR, JSONB
+import enum
+from sqlalchemy import Enum as SQLEnum  
+from app.schemas import Role
 
-Base = declarative_base(cls=AsyncAttrs)
+class Base(AsyncAttrs, DeclarativeBase):
+    pass
 
-
-
-# Role Enum
 class Role(enum.Enum):
     CITIZEN = "citizen"
     MP = "mp"
     ADMIN = "admin"
     JOURNALIST = "journalist"
 
+# Association tables
 group_members = Table(
-    'group_members',
+    "group_members",
     Base.metadata,
-    Column('group_id', Integer, ForeignKey('groups.id', ondelete='CASCADE'), primary_key=True),
-    Column('user_id', Integer, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True, nullable=False),
+    Column("group_id", Integer, ForeignKey("groups.id"), primary_key=True, nullable=False),
 )
 
 post_categories = Table(
-    'post_categories',
+    "post_categories",
     Base.metadata,
-    Column('post_id', Integer, ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True),
-    Column('category_id', Integer, ForeignKey('categories.id', ondelete='CASCADE'), primary_key=True)
+    Column("post_id", Integer, ForeignKey("posts.id"), primary_key=True, nullable=False),
+    Column("category_id", Integer, ForeignKey("categories.id"), primary_key=True, nullable=False),
 )
+
 
 class User(Base):
     __tablename__ = "users"
@@ -61,7 +61,8 @@ class User(Base):
     notification_push = Column(Boolean, default=True, nullable=False)
     profile_image = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
-    role = Column(Enum(Role), default=Role.CITIZEN, nullable=False)
+    # FIXED: Bind to lowercase .value strings from Role Enum
+    role = Column(SQLEnum(Role, native_enum=False, values_callable=lambda x: [e.value for e in x]), default=Role.CITIZEN, nullable=False)
     is_active = Column(Boolean, default=True)
     search_vector = Column(TSVECTOR, nullable=True)
 
@@ -77,77 +78,82 @@ class User(Base):
 class Post(Base):
     __tablename__ = "posts"
     id = Column(Integer, primary_key=True, index=True)
-    title_of_the_post = Column(String, index=True, nullable=False)
-    content = Column(String, index=True, nullable=False)
-    published = Column(Boolean, server_default='TRUE', index=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    view_count = Column(Integer, default=0, nullable=False)
-    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
-    search_vector = Column(TSVectorType, Computed(
-        "to_tsvector('english', title_of_the_post || ' ' || content)", persisted=True
-    ))
-    owner = relationship("User")
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    search_vector = Column(TSVECTOR, nullable=True)
+
+    owner = relationship("User", back_populates="posts")
+    group = relationship("Group", back_populates="posts")
+    comments = relationship("Comment", back_populates="post")
+    votes = relationship("Vote", back_populates="post")
     categories = relationship("Category", secondary=post_categories, back_populates="posts")
-    group = relationship("Group")
-
-
-class Vote(Base):
-    __tablename__ = "votes"
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
 
 class Comment(Base):
     __tablename__ = "comments"
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String, nullable=False)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    media_url = Column(String, nullable=True)
-    search_vector = Column(TSVectorType, Computed(
-        "to_tsvector('english', content)", persisted=True
-    ))
-    user = relationship("User")
-    post = relationship("Post")
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
+    parent_comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    user = relationship("User", back_populates="comments")
+    post = relationship("Post", back_populates="comments")
+    parent_comment = relationship("Comment", remote_side=[id])
+    replies = relationship("Comment", back_populates="parent_comment")
+
+class Vote(Base):
+    __tablename__ = "votes"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True, nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id"), primary_key=True, nullable=False)
+    vote_type = Column(String, nullable=False)  # "up" or "down"
+
+    user = relationship("User", back_populates="votes")
+    post = relationship("Post", back_populates="votes")
 
 class Category(Base):
     __tablename__ = "categories"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False, index=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
+    name = Column(String, unique=True, nullable=False)
+    description = Column(String, nullable=True)
+
     posts = relationship("Post", secondary=post_categories, back_populates="categories")
 
 class Group(Base):
     __tablename__ = "groups"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, unique=True, nullable=False)
     description = Column(String, nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text('now()'))
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    owner = relationship("User")
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
+    is_active = Column(Boolean, default=True)
+
     members = relationship("User", secondary=group_members, back_populates="groups")
     posts = relationship("Post", back_populates="group")
 
 class Notification(Base):
     __tablename__ = "notifications"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    message = Column(String, nullable=False)
-    is_read = Column(Boolean, default=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
-    post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=True)
-    group_id = Column(Integer, ForeignKey('groups.id', ondelete='CASCADE'), nullable=True)
-    user = relationship("User", back_populates="notifications")
+    is_read = Column(Boolean, default=False)
 
+    user = relationship("User", back_populates="notifications")
 
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True, index=True)
-    sender_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    recipient_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False)
+
     sender = relationship("User", back_populates="sent_messages", foreign_keys=[sender_id])
     recipient = relationship("User", back_populates="received_messages", foreign_keys=[recipient_id])
 
@@ -155,8 +161,9 @@ class LiveFeed(Base):
     __tablename__ = "live_feeds"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    stream_url = Column(String, nullable=False)
-    description = Column(String, nullable=True)
+    content = Column(String, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'), nullable=False)
-    journalist_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    journalist_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, default=True)
+
     journalist = relationship("User", back_populates="live_feeds")

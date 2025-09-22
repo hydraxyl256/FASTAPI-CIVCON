@@ -3,17 +3,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
 from .. import models, schemas
-from ..routers import oauth2
 from ..database import get_db
 from .permissions import require_role
+# Optional: from ..schemas import Role  # If you want to use Role.CITIZEN directly
+
 router = APIRouter(
     prefix="/categories",
     tags=["Categories"]
 )
 
 @router.post("/", response_model=schemas.CategoryResponse, status_code=status.HTTP_201_CREATED)
-async def create_category(category: schemas.CategoryCreate, db: AsyncSession = Depends(get_db), 
-                current_user: schemas.UserOut = Depends(require_role([schemas.Role.CITIZEN, schemas.Role.JOURNALIST]))):
+async def create_category(
+    category: schemas.CategoryCreate, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: schemas.UserOut = Depends(lambda: require_role([schemas.Role.CITIZEN, schemas.Role.JOURNALIST]))  # FIXED: Lambda wrapper for async dep
+):
     # Check if category name exists
     category_query = select(models.Category).where(models.Category.name == category.name)
     category_result = await db.execute(category_query)
@@ -27,7 +31,11 @@ async def create_category(category: schemas.CategoryCreate, db: AsyncSession = D
     return db_category
 
 @router.get("/", response_model=List[schemas.CategoryResponse])
-async def get_categories(db: AsyncSession = Depends(get_db)):
-    categories_query = select(models.Category)
+async def get_categories(
+    db: AsyncSession = Depends(get_db),
+    limit: int = 100,  # Added optional pagination
+    skip: int = 0
+):
+    categories_query = select(models.Category).offset(skip).limit(limit)
     categories_result = await db.execute(categories_query)
     return categories_result.scalars().all()
